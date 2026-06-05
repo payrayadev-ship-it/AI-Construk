@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Building2, 
   MapPin, 
@@ -652,14 +653,31 @@ export default function App() {
     <div id="construct-ai-root" className="min-h-screen bg-[#020817] font-sans text-slate-200 overflow-x-hidden selection:bg-brand-gold selection:text-slate-950 flex flex-col">
       
       {/* Toast Alert banner system */}
-      {toast && (
-        <div id="construct-toast" className={`fixed top-16 right-4 lg:top-6 lg:right-6 z-50 flex items-center p-4 rounded-xl border shadow-2xl backdrop-blur-xl animate-pulse transition-all max-w-sm ${toast.type === 'success' ? 'bg-[#D4AF37]/10 border-[#D4AF37] text-slate-100' : 'bg-slate-900 border-red-500/50 text-red-100'}`}>
-          <div className="mr-3">
-            {toast.type === 'success' ? <CheckCircle2 className="h-5 w-5 text-[#D4AF37]" /> : <AlertTriangle className="h-5 w-5 text-red-400" />}
-          </div>
-          <div className="text-xs font-semibold leading-relaxed">{toast.message}</div>
-        </div>
-      )}
+      <AnimatePresence>
+        {toast && (
+          <motion.div 
+            id="construct-toast" 
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className={`fixed top-16 right-4 lg:top-6 lg:right-6 z-50 flex items-center p-4 rounded-xl border-2 shadow-2xl backdrop-blur-xl transition-all max-w-sm ${
+              toast.type === 'success' 
+                ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-100 shadow-emerald-500/10' 
+                : toast.type === 'info' 
+                  ? 'bg-slate-950/90 border-brand-gold/40 text-slate-100 shadow-brand-gold/10'
+                  : 'bg-amber-950/90 border-amber-500/40 text-amber-100 shadow-amber-500/10'
+            }`}
+          >
+            <div className="mr-3 shrink-0">
+              {toast.type === 'success' && <CheckCircle2 className="h-5 w-5 text-emerald-400" />}
+              {toast.type === 'info' && <Sparkles className="h-5 w-5 text-[#D4AF37] animate-pulse" />}
+              {toast.type === 'warning' && <AlertTriangle className="h-5 w-5 text-amber-400" />}
+            </div>
+            <div className="text-xs font-bold font-mono tracking-tight leading-relaxed">{toast.message}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="flex-1 flex flex-col lg:flex-row pb-12 lg:pb-0">
         
@@ -755,7 +773,13 @@ export default function App() {
               <>
                 {/* 1. VIEW LANDING PAGE */}
                 {currentView === 'landing' && (
-              <div id="view-landing" className="space-y-8 max-w-6xl mx-auto py-4 fade-in-up">
+                  <motion.div 
+                    id="view-landing" 
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
+                    className="space-y-8 max-w-6xl mx-auto py-4"
+                  >
                 
                 {/* Hero Banner Title Area */}
                 <div className="text-center space-y-4 py-8 relative">
@@ -865,12 +889,18 @@ export default function App() {
                   </div>
                 </div>
 
-              </div>
+              </motion.div>
             )}
 
             {/* 2. VIEW ENTERPRISE DASHBOARD */}
             {currentView === 'dashboard' && (
-              <div id="view-dashboard" className="space-y-6 fade-in-up">
+              <motion.div 
+                id="view-dashboard" 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="space-y-6"
+              >
                 
                 {/* Greeting row */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1008,12 +1038,18 @@ export default function App() {
 
                 </div>
 
-              </div>
+              </motion.div>
             )}
 
             {/* 3. VIEW GIS VIEWER */}
             {currentView === 'gis' && (
-              <div id="view-gis" className="space-y-6 fade-in-up">
+              <motion.div 
+                id="view-gis" 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="space-y-6"
+              >
                 
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
@@ -1261,12 +1297,18 @@ export default function App() {
 
                 </div>
 
-              </div>
+              </motion.div>
             )}
 
             {/* 4. VIEW LAND MANAGEMENT */}
             {currentView === 'land' && (
-              <div id="view-land" className="space-y-6 fade-in-up">
+              <motion.div 
+                id="view-land" 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="space-y-6"
+              >
                 
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
@@ -1387,12 +1429,18 @@ export default function App() {
 
                 </div>
 
-              </div>
+              </motion.div>
             )}
 
             {/* 5. VIEW AI PROPOSAL */}
             {currentView === 'proposal' && (
-              <div id="view-proposal" className="space-y-6 fade-in-up">
+              <motion.div 
+                id="view-proposal" 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="space-y-6"
+              >
                 
                 <div className="border-b border-white/5 pb-4">
                   <h2 className="text-2xl font-bold font-display text-white">
@@ -1569,12 +1617,18 @@ export default function App() {
 
                 </div>
 
-              </div>
+              </motion.div>
             )}
 
             {/* 6. VIEW AI RAB */}
             {currentView === 'rab' && (
-              <div id="view-rab" className="space-y-6 fade-in-up">
+              <motion.div 
+                id="view-rab" 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="space-y-6"
+              >
                 
                 <div className="border-b border-white/5 pb-4">
                   <h2 className="text-2xl font-bold font-display text-white">
@@ -1767,12 +1821,18 @@ export default function App() {
 
                 </div>
 
-              </div>
+              </motion.div>
             )}
 
             {/* 7. VIEW PROJECT MONITORING */}
             {currentView === 'project' && (
-              <div id="view-project" className="space-y-6 fade-in-up">
+              <motion.div 
+                id="view-project" 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="space-y-6"
+              >
                 
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
@@ -1945,12 +2005,18 @@ export default function App() {
 
                   </div>
                 )}
-              </div>
+              </motion.div>
             )}
 
             {/* 8. VIEW INVESTOR DASHBOARD */}
             {currentView === 'investor' && (
-              <div id="view-investor" className="space-y-6 fade-in-up">
+              <motion.div 
+                id="view-investor" 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="space-y-6"
+              >
                 
                 {/* Visual Header suitable for global investors */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -2033,12 +2099,18 @@ export default function App() {
                   </div>
                 </div>
 
-              </div>
+              </motion.div>
             )}
 
             {/* 9. VIEW INDUSTRIAL ESTATE PLANNER */}
             {currentView === 'industrial' && (
-              <div id="view-industrial" className="space-y-6 fade-in-up">
+              <motion.div 
+                id="view-industrial" 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="space-y-6"
+              >
                 
                 <div className="border-b border-white/5 pb-4">
                   <h2 className="text-2xl font-bold font-display text-white">
@@ -2209,12 +2281,18 @@ export default function App() {
 
                 </div>
 
-              </div>
+              </motion.div>
             )}
 
             {/* 10. VIEW SMART VILLAGE */}
             {currentView === 'smart-village' && (
-              <div id="view-smart-village" className="space-y-6 fade-in-up">
+              <motion.div 
+                id="view-smart-village" 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="space-y-6"
+              >
                 
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
@@ -2320,12 +2398,18 @@ export default function App() {
                   </div>
                 </div>
 
-              </div>
+              </motion.div>
             )}
 
             {/* 11. VIEW ADMIN PANEL */}
             {currentView === 'admin' && (
-              <div id="view-admin" className="space-y-6 fade-in-up">
+              <motion.div 
+                id="view-admin" 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="space-y-6"
+              >
                 
                 <div className="border-b border-white/5 pb-4">
                   <h2 className="text-2xl font-bold font-display text-white">
@@ -2428,7 +2512,7 @@ export default function App() {
 
                 </div>
 
-              </div>
+              </motion.div>
             )}
               </>
             )}

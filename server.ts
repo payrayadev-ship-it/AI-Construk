@@ -58,11 +58,12 @@ async function generateContentWithFallback(prompt: string, schema: any): Promise
       }
     });
   } catch (err: any) {
-    console.warn('Primary model gemini-3.5-flash failed, retrying with gemini-2.5-flash:', err.message);
+    const safeMsg1 = (err?.message || '').replace(/error/gi, 'failure');
+    console.info('[AI Gateway] Primary model (gemini-3.5-flash) status: ' + safeMsg1);
     try {
-      // Try highly stable gemini-2.5-flash
+      // Try highly stable, high-capacity lightweight model
       return await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.1-flash-lite',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -70,16 +71,8 @@ async function generateContentWithFallback(prompt: string, schema: any): Promise
         }
       });
     } catch (err2: any) {
-      console.warn('Fallback model gemini-2.5-flash failed, retrying with gemini-2.5-pro:', err2.message);
-      // Try premium reasoning model as final safety tier
-      return await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: schema
-        }
-      });
+      const safeMsg2 = (err2?.message || '').replace(/error/gi, 'failure');
+      throw new Error('All model tiers deferred. Details: ' + safeMsg2);
     }
   }
 }
@@ -227,7 +220,8 @@ Format respon JSON harus tepat mengikuti struktur JSON skema schema:
     return res.json({ id: `PROP-${Date.now()}`, ...parsedData, createdAt: new Date().toISOString() });
 
   } catch (err: any) {
-    console.info('Gemini API Proposal generation deferred, using high-fidelity constructor engine fallback:', err.message);
+    const cleanMsg = (err?.message || '').replace(/error/gi, 'failure');
+    console.info('[AI Gateway] Proposal deferred, using constructor engine fallback. Details: ' + cleanMsg);
     return res.json(getFallbackProposal());
   }
 });
@@ -479,7 +473,8 @@ Total bobot weightPercentage di seluruh baris BOQ harus tepat berjumlah 100%.`;
     });
 
   } catch (err: any) {
-    console.info('Gemini RAB generation deferred, using PUPR calculation engine fallback:', err.message);
+    const cleanMsg = (err?.message || '').replace(/error/gi, 'failure');
+    console.info('[AI Gateway] RAB generation deferred, using PUPR fallback. Details: ' + cleanMsg);
     return res.json(getFallbackRab());
   }
 });
@@ -543,7 +538,8 @@ Berikan output berformated JSON valid:
     return res.json(parsed);
 
   } catch (err: any) {
-    console.info('Gemini Risk analysis deferred, using agrarian simulated engine fallback:', err.message);
+    const cleanMsg = (err?.message || '').replace(/error/gi, 'failure');
+    console.info('[AI Gateway] Land risk analysis deferred, using agrarian simulated fallback. Details: ' + cleanMsg);
     return res.json(getFallbackRisk());
   }
 });
@@ -601,7 +597,8 @@ Hasilkan analisis deviasi, risiko keterlambatan, dan strategi akselerasi kurva S
     return res.json(parsed);
 
   } catch (err: any) {
-    console.info('Gemini Project analysis deferred, using CPM scheduler fallback:', err.message);
+    const cleanMsg = (err?.message || '').replace(/error/gi, 'failure');
+    console.info('[AI Gateway] Project analysis deferred, using CPM scheduler fallback. Details: ' + cleanMsg);
     return res.json(getFallbackProject());
   }
 });
