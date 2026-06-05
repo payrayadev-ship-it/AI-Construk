@@ -45,6 +45,45 @@ function getGeminiClient(): GoogleGenAI {
   return aiClient;
 }
 
+async function generateContentWithFallback(prompt: string, schema: any): Promise<any> {
+  const ai = getGeminiClient();
+  try {
+    // Try primary model first (as defined in API instructions)
+    return await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: schema
+      }
+    });
+  } catch (err: any) {
+    console.warn('Primary model gemini-3.5-flash failed, retrying with gemini-2.5-flash:', err.message);
+    try {
+      // Try highly stable gemini-2.5-flash
+      return await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: schema
+        }
+      });
+    } catch (err2: any) {
+      console.warn('Fallback model gemini-2.5-flash failed, retrying with gemini-2.5-pro:', err2.message);
+      // Try premium reasoning model as final safety tier
+      return await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: schema
+        }
+      });
+    }
+  }
+}
+
 // Helper to write safe fallback generators if Gemini API fails or is not activated
 const IndonesianLocations: Record<string, string> = {
   jakarta: 'Kawasan Elite SCBD Jakarta Selatan & Pantai Indah Kapuk (PIK) 2',
@@ -135,7 +174,6 @@ Proyek ini sinkron secara vertikal dengan Rencana Pembangunan Jangka Menengah Da
   }
 
   try {
-    const ai = getGeminiClient();
     const prompt = `Anda adalah Consultant Architect dan Financial Analyst Senior di Indonesia.
 Buat proposal kajian konstruksi dan studi kelayakan (Feasibility Study) komparatif mendalam secara profesional berbahasa Indonesia untuk proyek berikut:
 Nama Proyek: ${projectName}
@@ -159,39 +197,32 @@ Format respon JSON harus tepat mengikuti struktur JSON skema schema:
   ]
 }`;
 
-    // We do structured JSON content generation
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            projectName: { type: Type.STRING },
-            location: { type: Type.STRING },
-            landSize: { type: Type.NUMBER },
-            investmentValue: { type: Type.NUMBER },
-            executiveSummary: { type: Type.STRING },
-            feasibilityStudy: { type: Type.STRING },
-            businessPlan: { type: Type.STRING },
-            rpjmdAnalysis: { type: Type.STRING },
-            pitchDeckSlides: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  points: { type: Type.ARRAY, items: { type: Type.STRING } }
-                }
-              }
+    const schema = {
+      type: Type.OBJECT,
+      properties: {
+        projectName: { type: Type.STRING },
+        location: { type: Type.STRING },
+        landSize: { type: Type.NUMBER },
+        investmentValue: { type: Type.NUMBER },
+        executiveSummary: { type: Type.STRING },
+        feasibilityStudy: { type: Type.STRING },
+        businessPlan: { type: Type.STRING },
+        rpjmdAnalysis: { type: Type.STRING },
+        pitchDeckSlides: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              points: { type: Type.ARRAY, items: { type: Type.STRING } }
             }
-          },
-          required: ['projectName', 'location', 'landSize', 'investmentValue', 'executiveSummary', 'feasibilityStudy', 'businessPlan', 'rpjmdAnalysis', 'pitchDeckSlides']
+          }
         }
-      }
-    });
+      },
+      required: ['projectName', 'location', 'landSize', 'investmentValue', 'executiveSummary', 'feasibilityStudy', 'businessPlan', 'rpjmdAnalysis', 'pitchDeckSlides']
+    };
 
+    const response = await generateContentWithFallback(prompt, schema);
     const parsedData = JSON.parse(response.text || '{}');
     return res.json({ id: `PROP-${Date.now()}`, ...parsedData, createdAt: new Date().toISOString() });
 
@@ -345,7 +376,6 @@ app.post('/api/rab/generate', async (req, res) => {
 
   // Real pupr / sni calculation simulate
   try {
-    const ai = getGeminiClient();
     const prompt = `Anda adalah Estimator Konstruksi Sipil Senior di Indonesia menggunakan standar PUPR dan AHSP Indonesia.
 Buat Bill of Quantities (BOQ), Analisis Harga Satuan Pekerjaan (AHSP), data mingguan Kurva-S rencana mingguan selama 8 minggu untuk:
 Nama Pekerjaan: ${jobName}
@@ -372,65 +402,59 @@ Format respon harus berupa JSON kaku skema berikut:
 
 Total bobot weightPercentage di seluruh baris BOQ harus tepat berjumlah 100%.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            totalCost: { type: Type.NUMBER },
-            boq: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  jobSection: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  coefficient: { type: Type.NUMBER },
-                  volume: { type: Type.NUMBER },
-                  unit: { type: Type.STRING },
-                  unitPrice: { type: Type.NUMBER },
-                  totalPrice: { type: Type.NUMBER },
-                  weightPercentage: { type: Type.NUMBER },
-                }
-              }
-            },
-            ahsp: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  code: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  unit: { type: Type.STRING },
-                  unitPrice: { type: Type.NUMBER },
-                  laborCost: { type: Type.NUMBER },
-                  materialCost: { type: Type.NUMBER },
-                  equipmentCost: { type: Type.NUMBER },
-                  totalUnitPrice: { type: Type.NUMBER },
-                }
-              }
-            },
-            schedule: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  week: { type: Type.NUMBER },
-                  plannedPercentage: { type: Type.NUMBER },
-                  actualPercentage: { type: Type.NUMBER },
-                }
-              }
+    const schema = {
+      type: Type.OBJECT,
+      properties: {
+        totalCost: { type: Type.NUMBER },
+        boq: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              jobSection: { type: Type.STRING },
+              description: { type: Type.STRING },
+              coefficient: { type: Type.NUMBER },
+              volume: { type: Type.NUMBER },
+              unit: { type: Type.STRING },
+              unitPrice: { type: Type.NUMBER },
+              totalPrice: { type: Type.NUMBER },
+              weightPercentage: { type: Type.NUMBER },
             }
-          },
-          required: ['totalCost', 'boq', 'ahsp', 'schedule']
+          }
+        },
+        ahsp: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              code: { type: Type.STRING },
+              description: { type: Type.STRING },
+              unit: { type: Type.STRING },
+              unitPrice: { type: Type.NUMBER },
+              laborCost: { type: Type.NUMBER },
+              materialCost: { type: Type.NUMBER },
+              equipmentCost: { type: Type.NUMBER },
+              totalUnitPrice: { type: Type.NUMBER },
+            }
+          }
+        },
+        schedule: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              week: { type: Type.NUMBER },
+              plannedPercentage: { type: Type.NUMBER },
+              actualPercentage: { type: Type.NUMBER },
+            }
+          }
         }
-      }
-    });
+      },
+      required: ['totalCost', 'boq', 'ahsp', 'schedule']
+    };
 
+    const response = await generateContentWithFallback(prompt, schema);
     const parsed = JSON.parse(response.text || '{}');
     // Generate Kurva S data points from the schedule percentage cumulative
     let cumulativeRencana = 0;
@@ -487,7 +511,6 @@ app.post('/api/land/risk-analysis', async (req, res) => {
   }
 
   try {
-    const ai = getGeminiClient();
     const prompt = `Lakukan analisis risiko hukum lahan dan legalitas properti di Indonesia:
 Nomor Sertifikat: ${certificateNumber}
 Jenis Hak: ${certType} (SHM/HGB/HGU/AJB)
@@ -504,24 +527,18 @@ Berikan output berformated JSON valid:
   "legalAdvice": "Langkah mitigasi legal konkret sesuai hukum agraria Indonesia (UUPA No 5 1960)"
 }`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            riskLevel: { type: Type.STRING },
-            riskSummary: { type: Type.STRING },
-            conflictPotential: { type: Type.STRING },
-            legalAdvice: { type: Type.STRING }
-          },
-          required: ['riskLevel', 'riskSummary', 'conflictPotential', 'legalAdvice']
-        }
-      }
-    });
+    const schema = {
+      type: Type.OBJECT,
+      properties: {
+        riskLevel: { type: Type.STRING },
+        riskSummary: { type: Type.STRING },
+        conflictPotential: { type: Type.STRING },
+        legalAdvice: { type: Type.STRING }
+      },
+      required: ['riskLevel', 'riskSummary', 'conflictPotential', 'legalAdvice']
+    };
 
+    const response = await generateContentWithFallback(prompt, schema);
     const parsed = JSON.parse(response.text || '{}');
     return res.json(parsed);
 
@@ -554,7 +571,6 @@ app.post('/api/project/analyze', async (req, res) => {
   }
 
   try {
-    const ai = getGeminiClient();
     const prompt = `Kaji laporan konstruksi mingguan Indonesia berikut:
 Kemajuan Fisik Lapangan: ${physicalProgress}%
 Penyerapan Keuangan Anggaran: ${financialProgress}%
@@ -569,24 +585,18 @@ Hasilkan analisis deviasi, risiko keterlambatan, dan strategi akselerasi kurva S
   "mitigationStrategy": "Solusi percepatan operasional taktis sipil (crash program, double shift, dsb)"
 }`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            progressStatus: { type: Type.STRING },
-            delayRisk: { type: Type.STRING },
-            deviationPercentage: { type: Type.NUMBER },
-            mitigationStrategy: { type: Type.STRING }
-          },
-          required: ['progressStatus', 'delayRisk', 'deviationPercentage', 'mitigationStrategy']
-        }
-      }
-    });
+    const schema = {
+      type: Type.OBJECT,
+      properties: {
+        progressStatus: { type: Type.STRING },
+        delayRisk: { type: Type.STRING },
+        deviationPercentage: { type: Type.NUMBER },
+        mitigationStrategy: { type: Type.STRING }
+      },
+      required: ['progressStatus', 'delayRisk', 'deviationPercentage', 'mitigationStrategy']
+    };
 
+    const response = await generateContentWithFallback(prompt, schema);
     const parsed = JSON.parse(response.text || '{}');
     return res.json(parsed);
 
