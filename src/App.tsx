@@ -142,6 +142,7 @@ export default function App() {
   const [gisMeasureResult, setGisMeasureResult] = useState<string | null>(null);
   const [activeGeoLayer, setActiveGeoLayer] = useState<string>('all');
   const [drawingType, setDrawingType] = useState<string | null>(null);
+  const [showConflictRiskLayer, setShowConflictRiskLayer] = useState<boolean>(false);
 
   // State for Module 4: Land Management
   const [certificates, setCertificates] = useState<LandCertificate[]>([
@@ -1061,6 +1062,29 @@ export default function App() {
                       </div>
 
                       <div className="border-t border-white/5 pt-3">
+                        <label className="flex items-center gap-2 text-xs text-red-400 font-bold cursor-pointer hover:text-red-300 capitalize font-mono">
+                          <input 
+                            type="checkbox" 
+                            id="conflict-risk-layer-toggle"
+                            checked={showConflictRiskLayer}
+                            onChange={(e) => {
+                              setShowConflictRiskLayer(e.target.checked);
+                              if (e.target.checked) {
+                                showToast('Zonasi Risiko Konflik Lahan Diaktifkan!', 'warning');
+                              } else {
+                                showToast('Zonasi Risiko Konflik Lahan Dinonaktifkan', 'info');
+                              }
+                            }}
+                            className="accent-red-500 rounded border-white/10 h-3.5 w-3.5"
+                          />
+                          ⚠️ Conflict Risk Layer
+                        </label>
+                        <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                          Visualisasikan bidang sengketa/ulayat (Disputed) sebagai zona panas (glowing red heat zones) di peta masterplan.
+                        </p>
+                      </div>
+
+                      <div className="border-t border-white/5 pt-3">
                         <h4 className="text-xs font-bold tracking-wider uppercase font-mono text-slate-300">Sistem Analisis Ruang (GIS)</h4>
                         <div className="mt-2 flex flex-col gap-2">
                           <button id="btn-buffer" onClick={() => triggerGisOverlay('buffer')} className="w-full text-left py-1.5 px-2 bg-[#D4AF37]/10 border border-[#D4AF37]/35 rounded text-xs text-brand-gold-light hover:bg-[#D4AF37]/25 font-semibold transition-all">
@@ -1149,6 +1173,64 @@ export default function App() {
                             </div>
                           );
                       })}
+
+                      {/* Render land certificates as glowing red heat zones when Conflict Risk Layer is enabled */}
+                      {showConflictRiskLayer && certificates
+                        .filter(c => c.status === 'Disputed')
+                        .map((c, idx) => {
+                          const positionMap: Record<string, { left: string; top: string }> = {
+                            'LC-101': { left: '20%', top: '30%' },
+                            'LC-102': { left: '50%', top: '45%' },
+                            'LC-103': { left: '35%', top: '70%' },
+                            'LC-104': { left: '70%', top: '35%' }
+                          };
+                          
+                          const pos = positionMap[c.id] || { 
+                            left: `${35 + (idx * 20) % 50}%`, 
+                            top: `${40 + (idx * 15) % 45}%` 
+                          };
+
+                          return (
+                            <div 
+                              key={`conflict-${c.id}`}
+                              style={{ 
+                                left: pos.left, 
+                                top: pos.top,
+                              }}
+                              className="absolute transform -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-auto"
+                            >
+                              {/* Pulsating outer ring */}
+                              <div className="absolute inset-0 w-32 h-32 -m-16 rounded-full bg-red-600/20 animate-ping pointer-events-none" />
+                              
+                              {/* Translucent heat halo */}
+                              <div className="absolute inset-0 w-24 h-24 -m-12 rounded-full bg-red-500/30 blur-md animate-pulse pointer-events-none" />
+                              
+                              {/* Semi-transparent interactive center circle */}
+                              <div 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  showToast(`Peringatan Konflik AI BPN: ${c.certificateNumber} (${c.ownerName}) terdeteksi status sengketa!`, 'warning');
+                                }}
+                                className="relative w-12 h-12 -m-6 rounded-full bg-gradient-to-br from-red-600 to-red-900 border-2 border-red-500 flex flex-col items-center justify-center shadow-lg shadow-red-900/50 cursor-pointer hover:ring-4 hover:ring-red-400/50 transition-all group"
+                              >
+                                <span className="text-white font-mono text-[9px] font-black animate-pulse">CONFLICT</span>
+                                
+                                {/* Tooltip on hover */}
+                                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-950/95 border border-red-500 rounded-lg p-2.5 shadow-2xl text-[10px] text-slate-200 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity w-60 z-30 space-y-1">
+                                  <div className="font-bold text-red-400 uppercase font-mono flex items-center gap-1">
+                                    ⚠️ AI BPN: ZONA SENKETA
+                                  </div>
+                                  <div className="font-semibold text-white">{c.certificateNumber}</div>
+                                  <div className="text-[9px] text-slate-300">Pemilik: {c.ownerName}</div>
+                                  <div className="text-[9px] text-slate-400">Luas: {c.area.toLocaleString('id-ID')} m² | {c.location}</div>
+                                  <div className="text-red-300 font-mono text-[8px] mt-1 bg-red-950/40 px-1 py-0.5 rounded border border-red-900/30">
+                                    STATUS: {c.status.toUpperCase()}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
 
                       {/* Map coordinate axis and grids */}
                       <div className="absolute bottom-4 left-4 bg-slate-950/90 text-slate-300 p-2 rounded border border-white/10 font-mono text-[10px]">
@@ -1616,7 +1698,7 @@ export default function App() {
                                 </tr>
                               </thead>
                               <tbody>
-                                {rabOutput.boq?.map(b => (
+                                {(rabOutput?.boq || []).map(b => (
                                   <tr key={b.id} className="border-b border-white/5 hover:bg-white/5">
                                     <td className="py-2 px-1 text-slate-200">
                                       <div className="font-bold text-slate-300">{b.jobSection}</div>
