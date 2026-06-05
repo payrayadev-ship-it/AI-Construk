@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net (The Catch-All Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'fullName', 'role', 'companyName']) 
+        && data.keys().size() == 5
+        && data.uid is string && data.uid.size() <= 128
+        && data.email is string && data.email.size() <= 128
+        && data.fullName is string && data.fullName.size() <= 200
+        && data.role is string && data.role.size() <= 100
+        && data.companyName is string && data.companyName.size() <= 200
+        && data.uid == request.auth.uid;
+    }
+
+    // Secure user profiles matching schema
+    match /users/{uid} {
+      allow get: if isOwner(uid) && isValidId(uid);
+      allow create: if isOwner(uid) && isValidId(uid) && isValidUser(incoming());
+      allow update: if isOwner(uid) && isValidId(uid) && isValidUser(incoming())
+                       && incoming().uid == existing().uid
+                       && incoming().email == existing().email;
+      allow delete: if false; // Profile deletion is blocked on the client side
+    }
+  }
+}

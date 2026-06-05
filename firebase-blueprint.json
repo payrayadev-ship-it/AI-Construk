@@ -1,0 +1,38 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile containing identity and organization settings.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The Firebase Authentication unique identifier."
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address."
+        },
+        "fullName": {
+          "type": "string",
+          "description": "User full name."
+        },
+        "role": {
+          "type": "string",
+          "description": "User roles such as builder, consultant, or guest."
+        },
+        "companyName": {
+          "type": "string",
+          "description": "Name of the contractor or investor company."
+        }
+      },
+      "required": ["uid", "email", "fullName", "role", "companyName"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "Direct read/write lookup of basic user profiles."
+    }
+  }
+}

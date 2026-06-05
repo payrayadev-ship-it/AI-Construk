@@ -19,19 +19,40 @@ import {
   Landmark, 
   Users, 
   FileCheck2,
-  Cpu
+  Cpu,
+  LogIn,
+  LogOut
 } from 'lucide-react';
-import { User } from '../types';
+import { User, NotificationAlert } from '../types';
+import { auth } from '../firebase';
+import { signOut } from 'firebase/auth';
+import NotificationBell from './NotificationBell';
 
 interface NavigationProps {
   currentView: string;
   setCurrentView: (view: string) => void;
-  currentUser: User;
-  setCurrentUser: (user: User) => void;
+  currentUser: User | null;
+  setCurrentUser: (user: User | null) => void;
+  notifications?: NotificationAlert[];
+  onMarkAsRead?: (id: string) => void;
+  onMarkAllAsRead?: () => void;
+  onClearAll?: () => void;
+  onSimulateNew?: (type: 'land' | 'construction') => void;
 }
 
-export default function Navigation({ currentView, setCurrentView, currentUser, setCurrentUser }: NavigationProps) {
+export default function Navigation({ 
+  currentView, 
+  setCurrentView, 
+  currentUser, 
+  setCurrentUser,
+  notifications,
+  onMarkAsRead,
+  onMarkAllAsRead,
+  onClearAll,
+  onSimulateNew
+}: NavigationProps) {
   const [isOpen, setIsOpen] = useState(false);
+
 
   const navigationItems = [
     { id: 'landing', label: 'Home Portal', icon: Home },
@@ -56,6 +77,7 @@ export default function Navigation({ currentView, setCurrentView, currentUser, s
   ];
 
   const handleRoleChange = (role: User['role']) => {
+    if (!currentUser) return;
     const matched = availableRoles.find(x => x.role === role);
     setCurrentUser({
       ...currentUser,
@@ -76,15 +98,27 @@ export default function Navigation({ currentView, setCurrentView, currentUser, s
           <span className="font-display font-semibold text-white tracking-tight text-md">FORTUNA CONSTRUCT</span>
           <span className="text-[10px] text-brand-gold uppercase font-mono px-1 rounded bg-brand-gold/10">AI</span>
         </div>
-        <button 
-          id="mobile-nav-toggle"
-          onClick={() => setIsOpen(!isOpen)}
-          className="p-1.5 border border-brand-gold/35 rounded text-brand-gold hover:bg-brand-gold/10"
-        >
-          {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
-      </header>
+        <div className="flex items-center space-x-2">
+          {notifications && onMarkAsRead && onMarkAllAsRead && onClearAll && onSimulateNew && (
+            <NotificationBell 
+              notifications={notifications}
+              onMarkAsRead={onMarkAsRead}
+              onMarkAllAsRead={onMarkAllAsRead}
+              onClearAll={onClearAll}
+              onSimulateNew={onSimulateNew}
+            />
+          )}
+          <button 
+            id="mobile-nav-toggle"
+            onClick={() => setIsOpen(!isOpen)}
+            className="p-1.5 border border-brand-gold/35 rounded text-brand-gold hover:bg-brand-gold/10 animate-pulse-subtle"
+          >
+            {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
 
+      </header>
+ 
       {/* Sidebar Navigation */}
       <aside className={`fixed top-0 bottom-0 left-0 z-50 w-72 bg-slate-950/95 border-r border-brand-gold/15 flex flex-col pt-16 lg:pt-0 transform transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-0 lg:translate-x-0'}`}>
         {/* Brand Header */}
@@ -100,33 +134,64 @@ export default function Navigation({ currentView, setCurrentView, currentUser, s
 
         {/* User Persona & Role Switcher */}
         <div className="p-4 mx-4 my-4 rounded-lg bg-brand-navy/60 border border-brand-gold/20">
-          <div className="flex items-center space-x-3 mb-2">
-            <div className="h-9 w-9 rounded-full bg-brand-gold/25 flex items-center justify-center border border-brand-gold/50 text-brand-light">
-              <span className="font-display font-semibold text-brand-gold text-sm">
-                {currentUser?.fullName.charAt(0) || 'U'}
-              </span>
-            </div>
-            <div className="overflow-hidden">
-              <h2 className="text-sm font-semibold text-slate-100 truncate">{currentUser.fullName}</h2>
-              <p className="text-[10px] text-brand-gold font-mono truncate">{currentUser.companyName}</p>
-            </div>
-          </div>
+          {currentUser ? (
+            <>
+              <div className="flex items-center space-x-3 mb-2">
+                <div className="h-9 w-9 rounded-full bg-brand-gold/25 flex items-center justify-center border border-brand-gold/50 text-brand-light">
+                  <span className="font-display font-semibold text-brand-gold text-sm">
+                    {currentUser.fullName.charAt(0) || 'U'}
+                  </span>
+                </div>
+                <div className="overflow-hidden flex-1">
+                  <h2 className="text-sm font-semibold text-slate-100 truncate">{currentUser.fullName}</h2>
+                  <p className="text-[10px] text-brand-gold font-mono truncate">{currentUser.companyName}</p>
+                </div>
+              </div>
 
-          <div className="mt-3">
-            <label className="block text-[10px] text-slate-400 uppercase font-mono tracking-wider mb-1">
-              Simulasi Akun (SaaS Persona):
-            </label>
-            <select 
-              id="role-switch"
-              value={currentUser.role}
-              onChange={(e) => handleRoleChange(e.target.value as User['role'])}
-              className="w-full text-xs bg-slate-900 text-brand-gold-light border border-brand-gold/30 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-brand-gold pointer-events-auto"
-            >
-              {availableRoles.map(x => (
-                <option key={x.role} value={x.role}>{x.label}</option>
-              ))}
-            </select>
-          </div>
+              <div className="mt-3">
+                <label className="block text-[10px] text-slate-400 uppercase font-mono tracking-wider mb-1">
+                  Simulasi Akun (SaaS Persona):
+                </label>
+                <select 
+                  id="role-switch"
+                  value={currentUser.role}
+                  onChange={(e) => handleRoleChange(e.target.value as User['role'])}
+                  className="w-full text-xs bg-slate-900 text-brand-gold-light border border-brand-gold/30 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-brand-gold pointer-events-auto"
+                >
+                  {availableRoles.map(x => (
+                    <option key={x.role} value={x.role}>{x.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Secure Log Out Button */}
+              <button
+                onClick={async () => {
+                  try {
+                    await signOut(auth);
+                    setCurrentView('landing');
+                  } catch (err) {
+                    console.error('Sign out failed:', err);
+                  }
+                }}
+                className="w-full mt-3 py-1.5 bg-red-950/20 border border-red-500/20 rounded text-xs font-semibold text-red-300 hover:bg-red-950/40 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5 text-red-400" />
+                Keluar Sesi
+              </button>
+            </>
+          ) : (
+            <div className="text-center py-2 space-y-2">
+              <p className="text-[10px] text-slate-400 font-mono">PORTAL BELUM AKTIF</p>
+              <button
+                onClick={() => setCurrentView('dashboard')}
+                className="w-full py-1.5 bg-[#D4AF37] text-slate-900 rounded text-xs font-bold transition-all flex items-center justify-center gap-1.5 hover:brightness-110 active:scale-[0.98] cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                Masuk Portal
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Navigation Menus */}

@@ -223,3 +223,17 @@ export interface SmartSensor {
   value: string; // e.g., "75% Brightness", "Debit 12 m3/s", "Tinggi Air 1.2m"
   lastUpdated: string;
 }
+
+// ==========================================
+// MODUL 9: AI NOTIFICATIONS (Land & Construction alerts)
+// ==========================================
+export interface NotificationAlert {
+  id: string;
+  title: string;
+  description: string;
+  type: 'land' | 'construction';
+  severity: 'high' | 'medium' | 'info';
+  timestamp: string;
+  isRead: boolean;
+}
+

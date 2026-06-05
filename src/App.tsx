@@ -30,6 +30,8 @@ import {
   Search,
   Scale,
   Compass,
+  Activity,
+  Calendar,
   ArrowRight
 } from 'lucide-react';
 import { 
@@ -45,19 +47,60 @@ import {
   ProjectMetadata, 
   IndustrialEstateSim, 
   InvestorPortfolio, 
-  SmartSensor 
+  SmartSensor,
+  NotificationAlert
 } from './types';
 import Navigation from './components/Navigation';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, db } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import AuthScreen from './components/AuthScreen';
+import TimelineCalendar from './components/TimelineCalendar';
+import NotificationBell from './components/NotificationBell';
+
 
 export default function App() {
   const [currentView, setCurrentView] = useState<string>('landing');
-  const [currentUser, setCurrentUser] = useState<User>({
-    id: 'usr-928',
-    email: 'payrayadev@gmail.com',
-    role: 'developer',
-    fullName: 'Ir. Raden Pratama',
-    companyName: 'Nusantara Karya, PT'
-  });
+  const [projectTab, setProjectTab] = useState<'kalender' | 'laporan'>('kalender');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      setIsAuthChecking(true);
+      if (fbUser) {
+        // Fetch profile document
+        try {
+          const userDoc = await getDoc(doc(db, 'users', fbUser.uid));
+          if (userDoc.exists()) {
+            setCurrentUser(userDoc.data() as User);
+          } else {
+            // Fallback setup if Firestore is slow or empty
+            setCurrentUser({
+              id: fbUser.uid,
+              email: fbUser.email || 'developer@fortuna.co.id',
+              role: 'developer',
+              fullName: fbUser.displayName || 'Ir. Rekanan Baru',
+              companyName: 'Nusantara Karya, PT'
+            });
+          }
+        } catch (err) {
+          console.warn('Gagal memproses detail akun dari Firestore:', err);
+          setCurrentUser({
+            id: fbUser.uid,
+            email: fbUser.email || 'developer@fortuna.co.id',
+            role: 'developer',
+            fullName: fbUser.displayName || 'Ir. Rekanan Baru',
+            companyName: 'Nusantara Karya, PT'
+          });
+        }
+      } else {
+        setCurrentUser(null);
+      }
+      setIsAuthChecking(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Global UI Alert/Toast state:
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'warning' } | null>(null);
@@ -110,6 +153,143 @@ export default function App() {
   const [searchCert, setSearchCert] = useState('');
   const [selectedCert, setSelectedCert] = useState<LandCertificate | null>(null);
   const [analyzingLandRisk, setAnalyzingLandRisk] = useState(false);
+
+  // State for AI Notifications & Risk Warnings
+  const [notifications, setNotifications] = useState<NotificationAlert[]>(() => {
+    const saved = localStorage.getItem('saas_ai_notifications');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // Fallback
+      }
+    }
+    return [
+      {
+        id: 'NOTIF-01',
+        title: 'Tumpang Tindih Batas AJB-028-ADAT',
+        description: 'AI Engine mendeteksi 12% wilayah bidang tumpang tindih dengan Zona Hutan Lindung KLHK di sub-sektor KIPP.',
+        type: 'land',
+        severity: 'high',
+        timestamp: '2026-06-05 08:30',
+        isRead: false
+      },
+      {
+        id: 'NOTIF-02',
+        title: 'Keterlambatan Pengecoran Pile Cap',
+        description: 'Deviasi negatif s/d -7.2% pada struktur Jembatan Utama akibat keterlambatan supply ready-mix beton.',
+        type: 'construction',
+        severity: 'high',
+        timestamp: '2026-06-04 14:15',
+        isRead: false
+      },
+      {
+        id: 'NOTIF-03',
+        title: 'Masa Berlaku HGB-8843 Segera Berakhir',
+        description: 'Sertifikat HGB-8843-SEPAKU di Kawasan Industri tersisa kurang dari 8 bulan. Rekomendasi perpanjangan hak.',
+        type: 'land',
+        severity: 'medium',
+        timestamp: '2026-06-03 10:00',
+        isRead: false
+      },
+      {
+        id: 'NOTIF-04',
+        title: 'HSE Issue: Kelayakan Scaffolding',
+        description: 'Hasil audit mingguan mendeteksi retakan mikro pada klem scaffolding Blok Barat. Risiko kecelakaan kerja tinggi.',
+        type: 'construction',
+        severity: 'medium',
+        timestamp: '2026-06-02 11:20',
+        isRead: true
+      }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('saas_ai_notifications', JSON.stringify(notifications));
+  }, [notifications]);
+
+  const handleMarkNotifAsRead = (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    showToast('Notifikasi ditandai telah dibaca', 'success');
+  };
+
+  const handleMarkAllNotifsAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    showToast('Semua notifikasi ditandai dibaca', 'success');
+  };
+
+  const handleClearAllNotifs = () => {
+    setNotifications([]);
+    showToast('Seluruh daftar notifikasi berhasil dibersihkan', 'info');
+  };
+
+  const handleSimulateNewNotif = (type: 'land' | 'construction') => {
+    const freshId = `NOTIF-${Date.now().toString().slice(-4)}`;
+    const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    
+    let newNotif: NotificationAlert;
+    if (type === 'land') {
+      const landAlerts = [
+        {
+          title: 'Konflik Batas Adat Ulayat Baru',
+          description: 'Laporan tumpang sengketa klaim ulayat terdeteksi di koordinat Blok Utara 3.',
+          severity: 'high' as const
+        },
+        {
+          title: 'Sertifikat Clean & Clear Berubah Status',
+          description: 'HGU wilayah Penyangga PJU dilaporkan masuk sengketa batas ukur BPN.',
+          severity: 'medium' as const
+        },
+        {
+          title: 'Selesai Analisis Risiko ATR/BPN',
+          description: 'Pengecekan BPN tuntas untuk area baru. Tidak ditemukan overlapping lahan nasional.',
+          severity: 'info' as const
+        }
+      ];
+      const selected = landAlerts[Math.floor(Math.random() * landAlerts.length)];
+      newNotif = {
+        id: freshId,
+        title: selected.title,
+        description: selected.description,
+        type: 'land',
+        severity: selected.severity,
+        timestamp: nowStr,
+        isRead: false
+      };
+    } else {
+      const constAlerts = [
+        {
+          title: 'Keterlambatan Pengecoran Slab Jembatan',
+          description: 'AI mendeteksi deviasi -5.4% s/d minggu ke-18 akibat kemacetan aspal hotmix.',
+          severity: 'high' as const
+        },
+        {
+          title: 'Kelebihan CapEx Terdeteksi',
+          description: 'Alokasi pengeluaran bulanan melewati batas toleransi Rp 12 Miliar di atas proyeksi Kurva S.',
+          severity: 'medium' as const
+        },
+        {
+          title: 'Evaluasi Mutu Ready-mix K-350',
+          description: 'Hasil lab silinder beton 28 hari mencapai standar keandalan mutu prima 100%.',
+          severity: 'info' as const
+        }
+      ];
+      const selected = constAlerts[Math.floor(Math.random() * constAlerts.length)];
+      newNotif = {
+        id: freshId,
+        title: selected.title,
+        description: selected.description,
+        type: 'construction',
+        severity: selected.severity,
+        timestamp: nowStr,
+        isRead: false
+      };
+    }
+
+    setNotifications(prev => [newNotif, ...prev]);
+    showToast(`Notifikasi Baru: ${newNotif.title}`, 'info');
+  };
+
 
   // State for Module 5: Project Management & Curve-S Updates
   const [projectMetadata, setProjectMetadata] = useState<ProjectMetadata>({
@@ -304,6 +484,21 @@ export default function App() {
       });
 
       showToast(`Analisis Risiko Legalitas Agraria UUPA untuk ${cert.certificateNumber} Selesai!`, 'success');
+      
+      // Inject alert dynamically
+      const freshId = `NOTIF-LND-${Date.now().toString().slice(-3)}`;
+      const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+      const newLandNotif: NotificationAlert = {
+        id: freshId,
+        title: `Risiko AI BPN: ${cert.certificateNumber}`,
+        description: `Zonasi Lahan ${cert.certificateNumber} telah divalidasi. Tingkat Risiko: ${result.riskLevel}. ${result.riskSummary.slice(0, 110)}...`,
+        type: 'land',
+        severity: (result.riskLevel || 'low').toLowerCase() as NotificationAlert['severity'],
+        timestamp: nowStr,
+        isRead: false
+      };
+      setNotifications(prev => [newLandNotif, ...prev]);
+
     } catch (err: any) {
       showToast('Gagal memproses analisis risiko legal', 'warning');
     } finally {
@@ -354,6 +549,22 @@ export default function App() {
       }));
 
       showToast('Weekly Site Report berhasil dimasukkan. AI Engine menganalisis deviasi!', 'success');
+
+      // Inject alert dynamically based on AI analysis
+      const freshId = `NOTIF-CON-${Date.now().toString().slice(-3)}`;
+      const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+      const isHighRisk = aiResponse.progressStatus && (aiResponse.progressStatus.includes('Delay') || aiResponse.deviationPercentage < -5);
+      const newConstNotif: NotificationAlert = {
+        id: freshId,
+        title: `Verifikasi AI: ${aiResponse.progressStatus || 'Laporan Site Berhasil'}`,
+        description: `Site Report Mingguan dianalisis. Deviasi: ${Number(aiResponse.deviationPercentage || 0).toFixed(2)}%. Mitigasi: ${aiResponse.mitigationStrategy ? aiResponse.mitigationStrategy.slice(0, 110) + '...' : 'Pemeliharaan ritme kerja reguler.'}`,
+        type: 'construction',
+        severity: isHighRisk ? 'high' : 'info',
+        timestamp: nowStr,
+        isRead: false
+      };
+      setNotifications(prev => [newConstNotif, ...prev]);
+
     } catch (e) {
       showToast('Error memproses laporan konstruksi', 'warning');
     } finally {
@@ -408,7 +619,7 @@ export default function App() {
       coordinates: [[-0.425 - (y / 10000), 116.945 + (x / 10000)]],
       area: Math.round(Math.random() * 45000 + 10000),
       color: colors[drawingType] || '#D4AF37',
-      owner: currentUser.companyName,
+      owner: currentUser ? currentUser.companyName : 'Guest PT',
       status: 'Pengajuan Digital Twin'
     };
 
@@ -466,6 +677,11 @@ export default function App() {
           }} 
           currentUser={currentUser} 
           setCurrentUser={setCurrentUser} 
+          notifications={notifications}
+          onMarkAsRead={handleMarkNotifAsRead}
+          onMarkAllAsRead={handleMarkAllNotifsAsRead}
+          onClearAll={handleClearAllNotifs}
+          onSimulateNew={handleSimulateNewNotif}
         />
 
         {/* Action center viewport */}
@@ -475,7 +691,7 @@ export default function App() {
           <header className="hidden lg:flex h-16 items-center justify-between px-8 bg-slate-950/20 backdrop-blur-md border-b border-white/5">
             <div className="flex items-center gap-4">
               <span className="text-xs bg-brand-gold/15 text-[#D4AF37] px-2.5 py-1 rounded border border-brand-gold/30 font-display font-medium tracking-wide">
-                SAAS PORTAL PERSONA: <strong className="uppercase">{currentUser.role}</strong>
+                SAAS PORTAL PERSONA: <strong className="uppercase">{currentUser ? currentUser.role : 'GUEST'}</strong>
               </span>
               <div className="w-px h-4 bg-white/10"></div>
               <span className="text-xs text-slate-400 font-mono">
@@ -484,6 +700,14 @@ export default function App() {
             </div>
             
             <div className="flex items-center gap-4">
+              <NotificationBell 
+                notifications={notifications}
+                onMarkAsRead={handleMarkNotifAsRead}
+                onMarkAllAsRead={handleMarkAllNotifsAsRead}
+                onClearAll={handleClearAllNotifs}
+                onSimulateNew={handleSimulateNewNotif}
+              />
+              
               <div className="flex items-center gap-2 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-white/5 text-xs">
                 <div id="live-indicator-dot" className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                 <span className="font-mono text-slate-300 font-medium">IKN Nusantara - Phase 2 Active</span>
@@ -504,8 +728,32 @@ export default function App() {
           {/* Core pages router renderer */}
           <div className="flex-1 p-4 lg:p-6 space-y-6">
             
-            {/* 1. VIEW LANDING PAGE */}
-            {currentView === 'landing' && (
+            {/* FORCE FIREBASE LOGIN GATING BEFORE DASHBOARD / MODULE ACCESS */}
+            {!currentUser && currentView !== 'landing' && (
+              <div className="flex items-center justify-center min-h-[60vh] py-12">
+                {isAuthChecking ? (
+                  <div className="flex flex-col items-center gap-4 text-center">
+                    <RefreshCw className="w-8 h-8 text-[#D4AF37] animate-spin" />
+                    <p className="text-xs text-slate-400 font-mono tracking-wider">MEMVERIFIKASI PORTAL AUTENTIKASI...</p>
+                  </div>
+                ) : (
+                  <AuthScreen 
+                    onAuthSuccess={(profile) => {
+                      setCurrentUser(profile);
+                    }}
+                    onCancel={() => {
+                      setCurrentView('landing');
+                    }}
+                    showCancelBtn={true}
+                  />
+                )}
+              </div>
+            )}
+
+            {(currentUser || currentView === 'landing') && (
+              <>
+                {/* 1. VIEW LANDING PAGE */}
+                {currentView === 'landing' && (
               <div id="view-landing" className="space-y-8 max-w-6xl mx-auto py-4 fade-in-up">
                 
                 {/* Hero Banner Title Area */}
@@ -635,7 +883,7 @@ export default function App() {
                   </div>
                   <div className="bg-[#D4AF37]/15 rounded-lg border border-[#D4AF37]/40 p-2 text-xs flex items-center gap-2">
                     <UserIcon className="h-4 w-4 text-[#D4AF37]" />
-                    <span className="text-white text-xs font-mono font-bold">{currentUser.fullName} ({currentUser.role})</span>
+                    <span className="text-white text-xs font-mono font-bold">{currentUser ? currentUser.fullName : 'Guest'} ({currentUser ? currentUser.role : 'Guest'})</span>
                   </div>
                 </div>
 
@@ -1459,131 +1707,162 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  
-                  {/* Register update form */}
-                  <div className="glass-panel p-5 rounded-2xl border border-white/10 space-y-4">
-                    <div className="text-xs font-bold font-mono tracking-widest text-[#D4AF37] uppercase">Kirim Laporan Pengawas Baru</div>
-                    
-                    <form onSubmit={handleProjectReportSubmit} className="space-y-3 text-xs">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-slate-400 mb-1">Selesai Fisik (%)</label>
-                          <input 
-                            id="project-physical"
-                            type="number" 
-                            step="0.01"
-                            value={newProgress.physical}
-                            onChange={(e) => setNewProgress({...newProgress, physical: Number(e.target.value)})}
-                            className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1.5 text-white"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-slate-400 mb-1">Cair Termin (%)</label>
-                          <input 
-                            id="project-financial"
-                            type="number" 
-                            step="0.01"
-                            value={newProgress.financial}
-                            onChange={(e) => setNewProgress({...newProgress, financial: Number(e.target.value)})}
-                            className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1.5 text-white"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-slate-400 mb-1">Uraian Ringkasan Kejadian Lapangan</label>
-                        <textarea 
-                          id="project-summary text"
-                          rows={3}
-                          value={newProgress.summary}
-                          onChange={(e) => setNewProgress({...newProgress, summary: e.target.value})}
-                          className="w-full bg-slate-900 border border-white/10 rounded px-2.5 py-1 text-slate-300 focus:outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-slate-400 mb-1">Kendala Utama Lapangan (Pemicu Deviasi)</label>
-                        <input 
-                          id="project-constrains text"
-                          type="text" 
-                          value={newProgress.constrains}
-                          onChange={(e) => setNewProgress({...newProgress, constrains: e.target.value})}
-                          className="w-full bg-slate-900 border border-white/10 rounded px-2.5 py-1 text-slate-300"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[10px] text-slate-500 mb-1">Lampirkan Foto Lokasi</label>
-                          <div className="border border-dashed border-white/10 p-2 text-center rounded text-[10px] text-slate-400 cursor-pointer">
-                            + Klik Foto .jpg
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-slate-500 mb-1">Lampirkan Rekor Video</label>
-                          <div className="border border-dashed border-white/10 p-2 text-center rounded text-[10px] text-slate-400 cursor-pointer">
-                            + Klik Video .mp4
-                          </div>
-                        </div>
-                      </div>
-
-                      <button 
-                        id="btn-submit-report"
-                        disabled={submittingReport}
-                        type="submit"
-                        className="w-full mt-3 py-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:brightness-110 disabled:opacity-40 rounded text-slate-950 font-bold font-display text-xs tracking-wider uppercase transition-all cursor-pointer"
-                      >
-                        {submittingReport ? 'Menghitung Resiko Keterlambatan...' : '🚀 KIRIM LAPORAN KE AI GATEWAY'}
-                      </button>
-                    </form>
-                  </div>
-
-                  {/* Physical progress logs timeline with AI analysis insights */}
-                  <div className="lg:col-span-2 space-y-4">
-                    <div className="glass-panel p-4 rounded-xl border border-white/5">
-                      <div className="text-xs font-bold text-slate-400 uppercase tracking-widest font-mono mb-4">HISTORI REKOR DAN AUDIT PROGRESS SITE</div>
-                      
-                      <div className="space-y-4">
-                        {projectMetadata.history.map((h, i) => (
-                          <div key={h.id} className="p-4 bg-slate-900/40 rounded-lg border border-white/5 space-y-3">
-                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-white/5 pb-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30 px-1.5 py-0.5 rounded font-mono font-bold">{h.reportType}</span>
-                                <span className="text-xs font-bold text-white font-mono">{h.reportDate} (ID: {h.id})</span>
-                              </div>
-
-                              <div className="flex items-center gap-3">
-                                <span className="text-xs text-slate-300">Fisik: <strong className="text-emerald-400">{h.physicalProgress}%</strong></span>
-                                <span className="text-xs text-slate-300">Biaya: <strong className="text-[#D4AF37]">{h.financialProgress}%</strong></span>
-                              </div>
-                            </div>
-
-                            <div className="space-y-1 text-xs">
-                              <div><strong className="text-slate-400">Ringkasan Pekerjaan Selesai:</strong><p className="text-slate-300 mt-0.5 font-sans leading-relaxed">{h.workSummary}</p></div>
-                              {h.constrains && <div><strong className="text-slate-400">Kendala Lapangan:</strong><p className="text-amber-300 mt-0.5 font-sans leading-relaxed">{h.constrains}</p></div>}
-                            </div>
-
-                            {/* AI analysis card attached inside the timeline block */}
-                            {h.aiAnalysis && (
-                              <div className="p-3.5 rounded bg-indigo-950/20 border border-indigo-500/20 text-xs">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="font-mono text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1">✨ AI MITIGATION STATUS: {h.aiAnalysis.progressStatus}</span>
-                                  <span className="font-mono text-[9px] text-[#D4AF37]">Deviasi: {h.aiAnalysis.deviationPercentage}%</span>
-                                </div>
-                                <div className="text-slate-200 mt-1">{h.aiAnalysis.delayRisk}</div>
-                                <div className="text-indigo-200 font-mono mt-1.5 text-[10.5px] leading-relaxed select-all"><strong>Rencana Taktis Sipil:</strong> {h.aiAnalysis.mitigationStrategy}</div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
+                {/* Sub-Tabs Navigator */}
+                <div className="flex flex-wrap border-b border-white/5 gap-2 pb-1 text-xs">
+                  <button
+                    id="tab-project-timeline"
+                    onClick={() => setProjectTab('kalender')}
+                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      projectTab === 'kalender' 
+                        ? 'bg-brand-gold/15 text-[#D4AF37] border border-brand-gold/30 font-display font-medium' 
+                        : 'text-slate-400 hover:text-white bg-transparent hover:bg-white/5'
+                    }`}
+                  >
+                    <Calendar className="w-3.5 h-3.5" /> Kalender & Timeline Milestone
+                  </button>
+                  <button
+                    id="tab-project-reports"
+                    onClick={() => setProjectTab('laporan')}
+                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      projectTab === 'laporan' 
+                        ? 'bg-brand-gold/15 text-[#D4AF37] border border-brand-gold/30 font-display font-medium' 
+                        : 'text-slate-400 hover:text-white bg-transparent hover:bg-white/5'
+                    }`}
+                  >
+                    <Activity className="w-3.5 h-3.5" /> Pengajuan Laporan Site
+                  </button>
                 </div>
 
+                {projectTab === 'kalender' ? (
+                  <div className="fade-in">
+                    <TimelineCalendar currentUser={currentUser} />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in">
+                    
+                    {/* Register update form */}
+                    <div className="glass-panel p-5 rounded-2xl border border-white/10 space-y-4">
+                      <div className="text-xs font-bold font-mono tracking-widest text-[#D4AF37] uppercase">Kirim Laporan Pengawas Baru</div>
+                      
+                      <form onSubmit={handleProjectReportSubmit} className="space-y-3 text-xs">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-slate-400 mb-1">Selesai Fisik (%)</label>
+                            <input 
+                              id="project-physical"
+                              type="number" 
+                              step="0.01"
+                              value={newProgress.physical}
+                              onChange={(e) => setNewProgress({...newProgress, physical: Number(e.target.value)})}
+                              className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1.5 text-white"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-slate-400 mb-1">Cair Termin (%)</label>
+                            <input 
+                              id="project-financial"
+                              type="number" 
+                              step="0.01"
+                              value={newProgress.financial}
+                              onChange={(e) => setNewProgress({...newProgress, financial: Number(e.target.value)})}
+                              className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1.5 text-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-400 mb-1">Uraian Ringkasan Kejadian Lapangan</label>
+                          <textarea 
+                            id="project-summary text"
+                            rows={3}
+                            value={newProgress.summary}
+                            onChange={(e) => setNewProgress({...newProgress, summary: e.target.value})}
+                            className="w-full bg-slate-900 border border-white/10 rounded px-2.5 py-1 text-slate-300 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-400 mb-1">Kendala Utama Lapangan (Pemicu Deviasi)</label>
+                          <input 
+                            id="project-constrains text"
+                            type="text" 
+                            value={newProgress.constrains}
+                            onChange={(e) => setNewProgress({...newProgress, constrains: e.target.value})}
+                            className="w-full bg-slate-900 border border-white/10 rounded px-2.5 py-1 text-slate-300"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] text-slate-500 mb-1">Lampirkan Foto Lokasi</label>
+                            <div className="border border-dashed border-white/10 p-2 text-center rounded text-[10px] text-slate-400 cursor-pointer">
+                              + Klik Foto .jpg
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-slate-500 mb-1">Lampirkan Rekor Video</label>
+                            <div className="border border-dashed border-white/10 p-2 text-center rounded text-[10px] text-slate-400 cursor-pointer">
+                              + Klik Video .mp4
+                            </div>
+                          </div>
+                        </div>
+
+                        <button 
+                          id="btn-submit-report"
+                          disabled={submittingReport}
+                          type="submit"
+                          className="w-full mt-3 py-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:brightness-110 disabled:opacity-40 rounded text-slate-950 font-bold font-display text-xs tracking-wider uppercase transition-all cursor-pointer"
+                        >
+                          {submittingReport ? 'Menghitung Resiko Keterlambatan...' : '🚀 KIRIM LAPORAN KE AI GATEWAY'}
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Physical progress logs timeline with AI analysis insights */}
+                    <div className="lg:col-span-2 space-y-4">
+                      <div className="glass-panel p-4 rounded-xl border border-white/5">
+                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest font-mono mb-4">HISTORI REKOR DAN AUDIT PROGRESS SITE</div>
+                        
+                        <div className="space-y-4">
+                          {projectMetadata.history.map((h, i) => (
+                            <div key={h.id} className="p-4 bg-slate-900/40 rounded-lg border border-white/5 space-y-3">
+                              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-white/5 pb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30 px-1.5 py-0.5 rounded font-mono font-bold">{h.reportType}</span>
+                                  <span className="text-xs font-bold text-white font-mono">{h.reportDate} (ID: {h.id})</span>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                  <span className="text-xs text-slate-300">Fisik: <strong className="text-emerald-400">{h.physicalProgress}%</strong></span>
+                                  <span className="text-xs text-slate-300">Biaya: <strong className="text-[#D4AF37]">{h.financialProgress}%</strong></span>
+                                </div>
+                              </div>
+
+                              <div className="space-y-1 text-xs">
+                                <div><strong className="text-slate-400">Ringkasan Pekerjaan Selesai:</strong><p className="text-slate-300 mt-0.5 font-sans leading-relaxed">{h.workSummary}</p></div>
+                                {h.constrains && <div><strong className="text-slate-400">Kendala Lapangan:</strong><p className="text-amber-300 mt-0.5 font-sans leading-relaxed">{h.constrains}</p></div>}
+                              </div>
+
+                              {/* AI analysis card attached inside the timeline block */}
+                              {h.aiAnalysis && (
+                                <div className="p-3.5 rounded bg-indigo-950/20 border border-indigo-500/20 text-xs">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="font-mono text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1">✨ AI MITIGATION STATUS: {h.aiAnalysis.progressStatus}</span>
+                                    <span className="font-mono text-[9px] text-[#D4AF37]">Deviasi: {h.aiAnalysis.deviationPercentage}%</span>
+                                  </div>
+                                  <div className="text-slate-200 mt-1">{h.aiAnalysis.delayRisk}</div>
+                                  <div className="text-indigo-200 font-mono mt-1.5 text-[10.5px] leading-relaxed select-all"><strong>Rencana Taktis Sipil:</strong> {h.aiAnalysis.mitigationStrategy}</div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                )}
               </div>
             )}
 
@@ -2068,6 +2347,8 @@ export default function App() {
                 </div>
 
               </div>
+            )}
+              </>
             )}
 
           </div>
