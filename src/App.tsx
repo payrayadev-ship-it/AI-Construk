@@ -53,8 +53,8 @@ import {
 } from './types';
 import Navigation from './components/Navigation';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, db } from './firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { auth, db, handleFirestoreError, OperationType } from './firebase';
+import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 import AuthScreen from './components/AuthScreen';
 import TimelineCalendar from './components/TimelineCalendar';
 import NotificationBell from './components/NotificationBell';
@@ -102,6 +102,29 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
+
+  // Listen to registered users only for admin users via realtime firestore
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'admin') {
+      setRegisteredUsers([]);
+      return;
+    }
+
+    const path = 'users';
+    const unsubscribe = onSnapshot(collection(db, path), (snapshot) => {
+      const usersList = snapshot.docs.map(doc => ({
+        uid: doc.id,
+        ...doc.data()
+      }));
+      setRegisteredUsers(usersList);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
 
   // Global UI Alert/Toast state:
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'warning' } | null>(null);
@@ -2454,6 +2477,48 @@ export default function App() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Live Registrations from Firestore */}
+                    <div className="glass-panel p-4 rounded-xl border border-brand-gold/20 space-y-4">
+                      <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                        <div className="text-xs font-bold text-[#F3E5AB] uppercase tracking-widest font-mono">
+                          📂 Pengguna Aktif Firestore (Realtime DB)
+                        </div>
+                        <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono animate-pulse">
+                          SYNCED
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-3 font-sans max-h-64 overflow-y-auto pr-1">
+                        {registeredUsers.length === 0 ? (
+                          <div className="text-[11px] text-slate-500 italic p-3 text-center">
+                            Memuat atau belum ada profil terdaftar di database ini.
+                          </div>
+                        ) : (
+                          registeredUsers.map((u, idx) => (
+                            <div key={u.uid || idx} className="p-3 bg-slate-950/80 rounded-lg border border-white/5 flex flex-col gap-1.5 transition-all hover:border-[#D4AF37]/35">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <div className="text-xs font-bold font-mono text-white flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                    {u.fullName || 'User Anonim'}
+                                  </div>
+                                  <span className="text-[10px] text-brand-gold/90 font-mono block select-all">{u.email}</span>
+                                </div>
+                                <span className="text-[9px] bg-indigo-500/15 text-indigo-300 px-2 py-0.5 rounded uppercase font-mono font-semibold">
+                                  {u.role || 'Guest'}
+                                </span>
+                              </div>
+                              <div className="text-[9px] text-slate-400 font-mono flex justify-between">
+                                <span>🏢 {u.companyName || 'Tidak terafiliasi'}</span>
+                                <span className="text-slate-600">ID: {u.uid ? `${u.uid.substr(0, 8)}...` : '-'}</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
                   </div>
 
                   {/* Operational system health panels */}

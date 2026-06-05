@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore } from 'firebase/firestore';
+import { doc, getDocFromServer, initializeFirestore } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -8,6 +8,21 @@ export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId); /* CRITICAL: The app will break without this line */
 export const auth = getAuth();
+
+// Run immediate connectivity health check
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test_connection_probe', 'health'));
+    console.info('[Firebase] Firestore initialization successful - Connected to server.');
+  } catch (error: any) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn("[Firebase] Offline Mode: Could not reach Firestore backend during boot. Using local cached state.");
+    } else {
+      console.info("[Firebase] Connectivity health probe completed.");
+    }
+  }
+}
+testConnection();
 
 // Standard intermediate operation types for detailed analytics/troubleshooting.
 export enum OperationType {

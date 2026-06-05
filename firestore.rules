@@ -41,7 +41,8 @@ service cloud.firestore {
 
     // Secure user profiles matching schema
     match /users/{uid} {
-      allow get: if isOwner(uid) && isValidId(uid);
+      allow get: if (isOwner(uid) || (isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')) && isValidId(uid);
+      allow list: if isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       allow create: if isOwner(uid) && isValidId(uid) && isValidUser(incoming());
       allow update: if isOwner(uid) && isValidId(uid) && isValidUser(incoming())
                        && incoming().uid == existing().uid
