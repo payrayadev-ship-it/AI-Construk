@@ -52,6 +52,8 @@ import {
   NotificationAlert
 } from './types';
 import Navigation from './components/Navigation';
+import { jsPDF } from 'jspdf';
+import * as XLSX from 'xlsx';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
@@ -670,6 +672,184 @@ export default function App() {
     setTimeout(() => {
       showToast(`Berhasil mengunduh dokumen ${name}.${format} secara aman dan langsung.`, 'success');
     }, 2000);
+  };
+
+  // Real PDF and CSV export for Investor Dashboard
+  const handleExportInvestorPDF = () => {
+    try {
+      showToast('Sedang mempersiapkan dokumen PDF...', 'info');
+      const doc = new jsPDF();
+      
+      // Document Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(22);
+      doc.setTextColor(212, 175, 55); // #D4AF37 brand-gold
+      doc.text("FORTUNA CONSTRUCT AI", 15, 20);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(148, 163, 184); // Slate muted color
+      doc.text("Sovereign Wealth Allocation & Financial Yield Monitor", 15, 26);
+      doc.text(`Tanggal Cetak: ${new Date().toLocaleDateString('id-ID')} ${new Date().toLocaleTimeString('id-ID')}`, 15, 31);
+      
+      // Header Divider Line
+      doc.setDrawColor(212, 175, 55);
+      doc.setLineWidth(0.5);
+      doc.line(15, 34, 195, 34);
+      
+      // Summary Metrics Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(30, 41, 59); // Charcoal Slate
+      doc.text("RINGKASAN FORTOFOLIO KONSOLIDASI (AUM)", 15, 43);
+      
+      // Draw Metrics Box
+      doc.setDrawColor(226, 232, 240);
+      doc.setFillColor(248, 250, 252);
+      doc.rect(15, 47, 180, 26, "FD");
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(71, 85, 105);
+      doc.text("Total Assets Under Management (AUM):", 20, 53);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(15, 23, 42);
+      doc.text("IDR 7.42 Triliun (IDR 7,420,000,000,000)", 85, 53);
+      
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(71, 85, 105);
+      doc.text("Weighted Historical Yield:", 20, 60);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(16, 185, 129); // green
+      doc.text("16.8% Annually", 85, 60);
+      
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(71, 85, 105);
+      doc.text("Zonasi Portofolio Strategis:", 20, 67);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(15, 23, 42);
+      doc.text("IKN, Batam, PIK2, Kendal (4 Kawasan Utama)", 85, 67);
+      
+      // Project Breakdown Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(30, 41, 59);
+      doc.text("SEBARAN EMITEN DAN PROYEK ALIANSI", 15, 84);
+      
+      // Draw Table Header
+      let startY = 89;
+      doc.setFillColor(30, 41, 59); // deep slate/black
+      doc.rect(15, startY, 180, 8, "F");
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(255, 255, 255);
+      doc.text("ID PROYEK", 18, startY + 5.5);
+      doc.text("NAMA KAWASAN / MITRA ALIANSI", 42, startY + 5.5);
+      doc.text("SAHAM (%)", 100, startY + 5.5);
+      doc.text("MODAL MASUK", 121, startY + 5.5);
+      doc.text("VALUASI", 152, startY + 5.5);
+      doc.text("YIELD (RoI)", 178, startY + 5.5);
+      
+      // Reset text style for rows
+      doc.setTextColor(15, 23, 42);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      
+      portfolio.allocatedProjects.forEach((p, index) => {
+        const rowY = startY + 8 + (index * 9);
+        
+        // Zebra striping
+        if (index % 2 === 0) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(15, rowY, 180, 9, "F");
+        }
+        
+        // Bottom border
+        doc.setDrawColor(241, 245, 249);
+        doc.line(15, rowY + 9, 195, rowY + 9);
+        
+        doc.text(p.projectId, 18, rowY + 6);
+        doc.text(p.projectName, 42, rowY + 6);
+        doc.text(`${p.sharesOutstandingPercentage}%`, 100, rowY + 6);
+        doc.text(`IDR ${(p.investedAmount / 1000000000000).toFixed(2)}T`, 121, rowY + 6);
+        doc.text(`IDR ${(p.currentValuation / 1000000000000).toFixed(2)}T`, 152, rowY + 6);
+        
+        // Highlight ROI
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(212, 175, 55); // brand-gold
+        doc.text(`+${p.roiToDate}%`, 178, rowY + 6);
+        
+        // Restore styles
+        doc.setTextColor(15, 23, 42);
+        doc.setFont("helvetica", "normal");
+      });
+      
+      // Footer page watermark and information
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184); // slate/muted gray
+      doc.text("Fortuna Construct AI Systems • Laporan Resmi Sovereign Wealth Ledger", 15, 282);
+      doc.text("Sertifikasi dan enkripsi transaksi aman teraudit.", 148, 282);
+      
+      doc.save(`Fortuna_Sovereign_Financial_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      showToast('Laporan portofolio berhasil diekspor ke PDF!', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Gagal memproses dokumen PDF.', 'warning');
+    }
+  };
+
+  const handleExportInvestorExcel = (format: 'xlsx' | 'csv') => {
+    try {
+      showToast(`Sedang mengekspor ke format ${format.toUpperCase()}...`, 'info');
+      
+      // Create worksheet for summary info
+      const summaryRows = [
+        ["METRIK FORTOFOLIO", "NILAI / DETAIL"],
+        ["Platform", "Fortuna Construct AI (Sovereign Ledger)"],
+        ["Global Assets Under Management (AUM)", "IDR 7.42 Triliun"],
+        ["Weighted Historical Yield (RoI)", "16.8% Annually"],
+        ["Zonasi Strategis", "IKN, Batam, PIK2, Kendal"],
+        ["Tanggal Cetak Laporan", new Date().toLocaleString('id-ID')],
+        [], // Empty row separator
+      ];
+
+      // Create headers & data for project list
+      const projectHeaders = ["ID Proyek", "Nama Kawasan / Proyek Mitra", "Modal Awal Masuk (IDR)", "Porsi Saham (%)", "Valuasi Sekarang (IDR)", "Yield Real (RoI %)", "Status Lapangan"];
+      const projectRows = portfolio.allocatedProjects.map(p => [
+        p.projectId,
+        p.projectName,
+        p.investedAmount,
+        p.sharesOutstandingPercentage,
+        p.currentValuation,
+        p.roiToDate,
+        p.status
+      ]);
+
+      // Merge and align elements for a clean output sheet
+      const combinedSheetData = [...summaryRows, ["SEBARAN EMITEN & ALIANSI KEUANGAN"], projectHeaders, ...projectRows];
+      const worksheet = XLSX.utils.aoa_to_sheet(combinedSheetData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Investor Financial Overview");
+
+      if (format === 'csv') {
+        const csvContent = XLSX.utils.sheet_to_csv(worksheet);
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute("download", `Fortuna_Sovereign_Financial_Report_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        XLSX.writeFile(workbook, `Fortuna_Sovereign_Financial_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+      }
+      
+      showToast(`Laporan finansial berhasil diekspor ke ${format.toUpperCase()}!`, 'success');
+    } catch (e) {
+      console.error(e);
+      showToast(`Gagal memproses ekspor ${format.toUpperCase()}.`, 'warning');
+    }
   };
 
   return (
@@ -2052,9 +2232,31 @@ export default function App() {
                     </p>
                   </div>
 
-                  <button onClick={() => triggerDownloadLog('pdf', 'Financial-Portfolio-Consolidated')} className="px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-600 text-slate-950 font-bold text-xs rounded shadow-lg uppercase tracking-wider hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1">
-                    <Download className="w-4 h-4" /> Download Investor Report (PDF)
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button 
+                      id="btn-export-pdf"
+                      onClick={handleExportInvestorPDF} 
+                      className="px-3.5 py-2 bg-gradient-to-r from-red-500/85 to-red-600/90 hover:from-red-500 hover:to-red-600 border border-red-500/35 text-white font-bold text-xs rounded-lg shadow-md tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <FileText className="w-4 h-4 text-red-100" /> Ekspor PDF
+                    </button>
+                    
+                    <button 
+                      id="btn-export-xlsx"
+                      onClick={() => handleExportInvestorExcel('xlsx')} 
+                      className="px-3.5 py-2 bg-teal-600/90 hover:bg-teal-500 border border-teal-500/35 text-white font-bold text-xs rounded-lg shadow-md tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Download className="w-4 h-4 text-teal-100" /> Ekspor Excel
+                    </button>
+
+                    <button 
+                      id="btn-export-csv"
+                      onClick={() => handleExportInvestorExcel('csv')} 
+                      className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 font-bold text-xs rounded-lg shadow-md tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Download className="w-4 h-4 text-slate-950" /> Ekspor CSV
+                    </button>
+                  </div>
                 </div>
 
                 {/* Performance stats summary */}
